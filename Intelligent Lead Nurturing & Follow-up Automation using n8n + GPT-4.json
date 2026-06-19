@@ -1,0 +1,1223 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "page": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "form": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "options": {}
+      },
+      "id": "776bbe4f-dc79-4bb3-9459-5329c339cbd0",
+      "name": "Facebook Lead Ads",
+      "type": "n8n-nodes-base.facebookLeadAdsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3504,
+        -400
+      ],
+      "webhookId": "fb-lead-webhook",
+      "credentials": {
+        "facebookLeadAdsOAuth2Api": {
+          "id": "Z8v35CrrpZKgGmbz",
+          "name": "Facebook Lead Ads account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "real-estate-lead",
+        "options": {}
+      },
+      "id": "5a158508-3469-4cdb-8b5f-b180dc2dcdc2",
+      "name": "Website Form Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -3520,
+        -176
+      ],
+      "webhookId": "website-form-webhook"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "id": "9a0c1a11-32f8-4d7c-947a-0d6cf5baf3d3",
+      "name": "WhatsApp Inbound",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3536,
+        208
+      ],
+      "webhookId": "whatsapp-inbound-webhook",
+      "disabled": true,
+      "notes": "Requires 360dialog or Twilio WhatsApp Business API credentials"
+    },
+    {
+      "parameters": {},
+      "id": "6b0aba12-55c7-408c-b4f3-33618b80f413",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -3296,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "29716208-17f0-4995-8f62-7ad040f5877a",
+      "name": "Normalize Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        -3104,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "search",
+        "filterGroupsUi": {
+          "filterGroupsValues": [
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "=email|string",
+                    "value": "={{ $('Merge All Sources').item.json.body.email }}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "id": "999fbbf4-9f41-4e32-b311-d22b810985ba",
+      "name": "HubSpot — Check Duplicate",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        -2896,
+        32
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "TUM6m1fZUAJwICTz",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "dup-check",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "71ed9cc9-2c26-4cf9-b7e8-cafdac90b47d",
+      "name": "IF — New Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2704,
+        32
+      ],
+      "notes": "True = new lead (total results = 0), False = duplicate, stop here"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert real estate lead qualifier working for a busy agency.\nYour job is to analyze incoming lead data and return a structured JSON score.\n\nAlways respond with ONLY valid JSON. No explanation, no markdown, no extra text.\n\nReturn this exact structure:\n{\n  \"score\": <number 1-10>,\n  \"urgency\": \"<hot|warm|cold>\",\n  \"budget_range\": \"<estimated budget range>\",\n  \"property_interest\": \"<buy|rent|invest|unknown>\",\n  \"timeline\": \"<immediate|1-3 months|3-6 months|unknown>\",\n  \"reason\": \"<one sentence explaining the score>\",\n  \"suggested_tone\": \"<excited|professional|gentle>\"\n}\n\nScoring rules:\n- 8-10 = Hot: clear budget, specific area, urgent timeline\n- 5-7 = Warm: some info, vague timeline\n- 1-4 = Cold: minimal info, no clear intent",
+              "role": "system"
+            },
+            {
+              "content": "=Lead data:\nName: {{ $json.full_name }}\nEmail: {{ $json.email }}\nPhone: {{ $json.phone }}\nSource: {{ $json.lead_source }}\nMessage: {{ $json.message }}\nProperty type: {{ $json.property_type }}\nArea of interest: {{ $json.area }}\nAd they clicked: {{ $json.ad_name }}\n\nQualify this lead."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "aed7ca52-f6e8-4037-8c78-5f6ae667b01a",
+      "name": "OpenAI — Score & Enrich",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        -2560,
+        -112
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "mfT4AwFrbAreEdVY",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.message?.content || '{}';\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch(e) {\n  parsed = { score: 5, urgency: 'warm', budget_range: 'unknown', property_interest: 'unknown', timeline: 'unknown', reason: 'Could not parse', suggested_tone: 'professional' };\n}\nconst prev = $('Normalize Fields').first().json;\nreturn [{\n  json: {\n    ...prev,\n    ai_score: parsed.score,\n    ai_urgency: parsed.urgency,\n    ai_budget_range: parsed.budget_range,\n    ai_property_interest: parsed.property_interest,\n    ai_timeline: parsed.timeline,\n    ai_reason: parsed.reason,\n    ai_suggested_tone: parsed.suggested_tone\n  }\n}];"
+      },
+      "id": "c3beebd3-538c-4fe1-9b51-447b8e0cd125",
+      "name": "Parse AI Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2272,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "email": "={{ $json.body.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": []
+          },
+          "firstName": "={{ $json.body.name }}",
+          "mobilePhoneNumber": "={{ $json.body.phone }}"
+        },
+        "options": {}
+      },
+      "id": "c32de7be-488e-4a9f-94c8-0965f00da083",
+      "name": "HubSpot — Create Contact",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        -176
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "TUM6m1fZUAJwICTz",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a friendly, professional real estate agent assistant.\nYou write the first WhatsApp message to a new lead on behalf of the agent.\n\nRules:\n- Maximum 3 sentences\n- Sound warm and human, never robotic or salesy\n- Use their first name only\n- Reference what they enquired about specifically\n- End with ONE soft open question\n- Never use exclamation marks more than once\n- Never mention AI or automation",
+              "role": "system"
+            },
+            {
+              "content": "=Write a WhatsApp first-response message for this lead:\n\nName: {{ $('Parse AI Score').first().json.body.name.split(' ')[0] }}\nEnquired about: {{ $('Parse AI Score').first().json.body.source }}\nBudget: {{ $('Parse AI Score').first().json.ai_budget_range }}\nUrgency: {{ $('Parse AI Score').first().json.ai_urgency }}\nSuggested tone: {{ $('Parse AI Score').first().json.ai_suggested_tone }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "229b2fcb-e59d-4b04-883c-465609198203",
+      "name": "OpenAI — Write First Message",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        -1984,
+        -336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "mfT4AwFrbAreEdVY",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const messageContent = $input.first().json.message?.content || 'Hi, thanks for your enquiry. We will be in touch shortly.';\nconst prev = $('Parse AI Score').first().json;\nreturn [{ json: { ...prev, whatsapp_message: messageContent } }];"
+      },
+      "id": "5aeec796-fd94-4f33-b305-9ae5e12e81ef",
+      "name": "Extract Message Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1696,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "options": {}
+      },
+      "id": "74c2e348-b1ef-4c53-bb31-afb597ca8a02",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1520,
+        -400
+      ],
+      "disabled": true,
+      "notes": "Uses Twilio. Alternatively swap for 360dialog node."
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Parse AI Score').first().json.body.email }}",
+        "subject": "=Thank you for your enquiry from {{ $('Parse AI Score').first().json.body.source }}",
+        "message": "=<p>Hi {{ $('Parse AI Score').first().json.body.name.split(' ')[0] }},</p>\n<p>{{ $('OpenAI — Write First Message').first().json.message.content }}</p>\n<p>You can also book a quick call directly here: <a href='https://calendly.com/YOUR_LINK'>Book a 15-min call</a></p>\n<br>\n<p>Warm regards,<br>Sentinel-AI Team</p>",
+        "options": {}
+      },
+      "id": "c4075d63-5ce9-43f1-8886-9ea9d1d7e10e",
+      "name": "Send Email (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        -1520,
+        -128
+      ],
+      "webhookId": "9118bbb9-402f-47db-928d-19106f3662f9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HaOCHb257U0tBbw9",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#slack-practice",
+          "mode": "name"
+        },
+        "text": "=fire: New {{ $('Parse AI Score').first().json.ai_urgency.toUpperCase() }}\nLead-Score {{ $('Parse AI Score').first().json.ai_score }}/10\n\nName: {{ $('Parse AI Score').first().json.body.name }}\nPhone: {{ $('Parse AI Score').first().json.body.phone }}\nEmail: {{ $('Parse AI Score').first().json.body.email }}\nSource: {{ $('Parse AI Score').first().json.body.source }}\nBudget: {{ $('Parse AI Score').first().json.ai_budget_range }}\nTimeline: {{ $('Parse AI Score').first().json.ai_timeline }}\nAI Reason: {{ $('Parse AI Score').first().json.ai_reason }}\n\n<https://app.hubspot.com | View in HubSpot>",
+        "otherOptions": {}
+      },
+      "id": "37c9bcdf-5244-479e-8d2f-ac37124ecb37",
+      "name": "Slack — Notify Agent",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        192
+      ],
+      "webhookId": "f436fccd-6178-44b8-86f4-b59e35f30bb8",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "zOtufH0quzMB3MB0",
+          "name": "Slack OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "id": "ceaf3031-5815-4d9b-9d1e-0b4627e833af",
+      "name": "Wait 2 Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        -1296,
+        0
+      ],
+      "webhookId": "a83adf52-4ffe-4058-9731-1f084bf7da05"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "get",
+        "contactId": {
+          "__rl": true,
+          "value": "={{ $('HubSpot — Create Contact').first().json.vid }}",
+          "mode": "id"
+        },
+        "additionalFields": {}
+      },
+      "id": "16401f02-3472-46c2-9333-b85ae748cd86",
+      "name": "HubSpot — Check Reply Status",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        -1104,
+        0
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "TUM6m1fZUAJwICTz",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "reply-check",
+              "leftValue": "true",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b8a9c8b9-b977-4a73-a68e-b1449f302f47",
+      "name": "IF — Lead Replied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        0
+      ],
+      "notes": "True = replied (go to reply analyzer), False = no reply (send follow-up)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "max-followup",
+              "leftValue": "={{ $json.followup_count }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "smallerEqual"
+              }
+            },
+            {
+              "id": "e86cc1e8-3436-46c9-bffa-961fef782510",
+              "leftValue": 0,
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "afa34a3c-b362-4a92-8d58-42fb257a2784",
+      "name": "IF — Under 3 Follow-ups?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a real estate agent assistant writing follow-up WhatsApp messages to leads who have not yet replied.\n\nRules:\n- Max 4 sentences\n- Never sound desperate or pushy\n- Each follow-up should offer different VALUE, not just 'checking in'\n- Follow-up 1: share a relevant property or market insight\n- Follow-up 2: offer social proof or a success story  \n- Follow-up 3: give a soft final nudge with an easy exit\n- Never mention previous follow-ups\n- Sound like a human agent, not a bot",
+              "role": "system"
+            },
+            {
+              "content": "=Write follow-up number {{ $json.followup_count }} for this lead:\n\nName: {{ $json.full_name.split(' ')[0] }}\nOriginal enquiry: {{ $json.property_type }} in {{ $json.area }}\nBudget: {{ $json.ai_budget_range }}\nDays since first contact: {{ Math.floor((new Date() - new Date($json.received_at)) / (1000*60*60*24)) }}\nAgent name: {{ $json.agent_name }}\nAgency name: {{ $json.agency_name }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.75
+        }
+      },
+      "id": "f445de3d-f7ff-4697-be6e-af6e2f7ac668",
+      "name": "OpenAI — Write Follow-up",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        112
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "mfT4AwFrbAreEdVY",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "options": {}
+      },
+      "id": "f59192d4-39a2-4e7c-af5d-302964eab74c",
+      "name": "Send Follow-up WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        256
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update"
+      },
+      "id": "14e36ff5-b672-4acb-812a-d70efa192d75",
+      "name": "HubSpot — Increment Follow-up Count",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        352,
+        608
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "TUM6m1fZUAJwICTz",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update"
+      },
+      "id": "93516482-7025-4503-9d94-0905c62f15b5",
+      "name": "HubSpot — Archive No Response",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        544
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "TUM6m1fZUAJwICTz",
+          "name": "HubSpot account"
+        }
+      },
+      "notes": "Marks lead as unqualified after 3 follow-ups with no reply"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are analyzing a reply from a real estate lead to determine their intent.\n\nRespond with ONLY valid JSON. No markdown, no explanation.\n\nReturn:\n{\n  \"intent\": \"<interested|objection|not_interested|question|booking_request>\",\n  \"sentiment\": \"<positive|neutral|negative>\",\n  \"objection_type\": \"<price|timing|location|trust|null>\",\n  \"suggested_action\": \"<book_viewing|send_properties|handle_objection|call_agent|archive>\",\n  \"reply_message\": \"<a short, appropriate reply message to send back>\"\n}",
+              "role": "system"
+            },
+            {
+              "content": "=Lead name: {{ $json.full_name.split(' ')[0] }}\nOriginal enquiry: {{ $json.property_type }} in {{ $json.area }}\nLead's reply: {{ $json.reply_text }}\n\nAnalyze this reply and suggest the next action."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "f96f5b54-aaaa-4f18-bfbf-f9e70c3b55a3",
+      "name": "OpenAI — Analyze Reply Intent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        -784,
+        -400
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "mfT4AwFrbAreEdVY",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.message?.content || '{}';\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch(e) { parsed = { intent: 'question', sentiment: 'neutral', suggested_action: 'call_agent', reply_message: 'Thanks for getting back to us! Our agent will be in touch shortly.' }; }\nconst prev = $('IF — Lead Replied?').first().json;\nreturn [{ json: { ...prev, ...parsed } }];"
+      },
+      "id": "7f3e2c80-5f0e-401a-8b32-735807c0af6f",
+      "name": "Parse Reply Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.suggested_action }}",
+                    "rightValue": "book_viewing",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Book Viewing"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.suggested_action }}",
+                    "rightValue": "handle_objection",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Handle Objection"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.suggested_action }}",
+                    "rightValue": "send_properties",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Send Properties"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.suggested_action }}",
+                    "rightValue": "archive",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Archive"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d450dedc-1144-49f4-8220-41ac2dea243a",
+      "name": "Switch — Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -304,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "en-gb.pk#holiday@group.v.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Holidays in Pakistan"
+        },
+        "start": "={{ $now.plus({ hours: 24 }).toISO() }}",
+        "end": "={{ $now.plus({ hours: 25 }).toISO() }}",
+        "additionalFields": {
+          "description": "=Lead: {{ $json.full_name }}\nPhone: {{ $json.phone }}\nEmail: {{ $json.email }}\nEnquiry: {{ $json.property_type }} in {{ $json.area }}\nBudget: {{ $json.ai_budget_range }}\nAI Score: {{ $json.ai_score }}/10",
+          "sendUpdates": "all",
+          "summary": "=Property Viewing — {{ $json.full_name }}"
+        }
+      },
+      "id": "2662202c-3d5d-4dd1-a54d-2ea2acceafaa",
+      "name": "Google Calendar — Create Viewing",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -384
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "ULPgOWSpTl7Jo6LU",
+          "name": "Google Calendar OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "options": {}
+      },
+      "id": "03d9b91e-355d-4f95-a5d0-6118dc14d0d3",
+      "name": "Send Reply WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -112
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update"
+      },
+      "id": "347fc652-72ab-4f6a-a824-94b91700773b",
+      "name": "HubSpot — Mark as Replied",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        512,
+        208
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "TUM6m1fZUAJwICTz",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dd8d841a-f9f9-4f71-874f-4893520bc56a",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -3536,
+        16
+      ],
+      "id": "e9b79adf-cfe8-444c-bbe6-6d7551ec922d",
+      "name": "Webhook1",
+      "webhookId": "dd8d841a-f9f9-4f71-874f-4893520bc56a"
+    }
+  ],
+  "pinData": {
+    "Webhook1": [
+      {
+        "json": {
+          "headers": {
+            "host": "behawo4390.app.n8n.cloud",
+            "user-agent": "PostmanRuntime/7.54.0",
+            "content-length": "198",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cache-control": "no-cache",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "54.86.50.139",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "a09d76962c6b658c-IAD",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "postman-token": "b3235bfb-73a2-4b5c-8ba6-7e4ba6aacc1b",
+            "x-forwarded-for": "54.86.50.139, 104.23.211.126",
+            "x-forwarded-host": "behawo4390.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-swc-29-7cb55c5d6f-r8xhg",
+            "x-is-trusted": "yes",
+            "x-real-ip": "54.86.50.139"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "name": "Ansa Ameen",
+            "email": "freshlead786@example.com",
+            "phone": "+923001234567",
+            "source": "Website Form",
+            "message": "Testing the 26 node workflow for true branch tracking."
+          },
+          "webhookUrl": "https://behawo4390.app.n8n.cloud/webhook-test/dd8d841a-f9f9-4f71-874f-4893520bc56a",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Facebook Lead Ads": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Website Form Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Sources": {
+      "main": [
+        [
+          {
+            "node": "Normalize Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Fields": {
+      "main": [
+        [
+          {
+            "node": "HubSpot — Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot — Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "IF — New Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — New Lead?": {
+      "main": [
+        [
+          {
+            "node": "OpenAI — Score & Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI — Score & Enrich": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Score": {
+      "main": [
+        [
+          {
+            "node": "HubSpot — Create Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot — Create Contact": {
+      "main": [
+        [
+          {
+            "node": "OpenAI — Write First Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI — Write First Message": {
+      "main": [
+        [
+          {
+            "node": "Extract Message Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message Text": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email (Gmail)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack — Notify Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        []
+      ]
+    },
+    "Send Email (Gmail)": {
+      "main": [
+        [
+          {
+            "node": "Wait 2 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack — Notify Agent": {
+      "main": [
+        [
+          {
+            "node": "Wait 2 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2 Days": {
+      "main": [
+        [
+          {
+            "node": "HubSpot — Check Reply Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot — Check Reply Status": {
+      "main": [
+        [
+          {
+            "node": "IF — Lead Replied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Lead Replied?": {
+      "main": [
+        [
+          {
+            "node": "OpenAI — Analyze Reply Intent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF — Under 3 Follow-ups?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Under 3 Follow-ups?": {
+      "main": [
+        [
+          {
+            "node": "OpenAI — Write Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HubSpot — Archive No Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI — Write Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-up WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-up WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "HubSpot — Increment Follow-up Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot — Increment Follow-up Count": {
+      "main": [
+        [
+          {
+            "node": "Wait 2 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI — Analyze Reply Intent": {
+      "main": [
+        [
+          {
+            "node": "Parse Reply Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reply Analysis": {
+      "main": [
+        [
+          {
+            "node": "Switch — Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch — Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar — Create Viewing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Reply WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Reply WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HubSpot — Mark as Replied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar — Create Viewing": {
+      "main": [
+        [
+          {
+            "node": "Send Reply WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reply WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "HubSpot — Mark as Replied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Inbound": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "16989270-99b8-47b8-be2f-d44c4ebbf08c",
+  "meta": {
+    "instanceId": "5bb9d37122068ef040bafa0c7c1902cefb73c57df4548eb28821ada12b9816d2"
+  },
+  "nodeGroups": [],
+  "id": "oDTcoqoUQawRYfjm",
+  "tags": []
+}
