@@ -315,16 +315,4 @@ AI-LeadFlow-Pro/
 AI Developer & Automation Specialist
 [LinkedIn](https://linkedin.com/in/ansa-ameen) | Softsynic Technologies
 
----
-
-## 📄 License
-
-MIT License — free to use, modify, and share with attribution.
-
----
-
-## ⭐ Support
-
-If this workflow helped you, please **star this repo** and share it with others building AI automations!
-
-> Built with n8n · OpenAI GPT-4 · HubSpot · Twilio · Slack · Google APIs
+Built with n8n · OpenAI GPT-4 · HubSpot · Twilio · Slack · Google APIs
